@@ -273,10 +273,15 @@ elseif( isset( $_GET['error'] ) && $_GET['error'] == md5( $_SERVER['HTTP_USER_AG
 */
 function getPageId( ){
   global $config;
-  if( !is_file( $config['dir_database'].'cache/links' ) )
-    exit( '<h1>'.( defined( 'DEVELOPER_MODE' ) ? 'There is no required file: '.$config['dir_database'].'cache/links' : 'This page is temporary unavailable' ).'</h1>' );
+  $sLinksFile = $config['dir_database'].'cache/links';
+  if( !is_file( $sLinksFile ) )
+    exit( '<h1>'.( defined( 'DEVELOPER_MODE' ) ? 'There is no required file: '.$sLinksFile : 'This page is temporary unavailable' ).'</h1>' );
 
-  $config['pages_links'] = unserialize( file_get_contents( $config['dir_database'].'cache/links' ) );
+  $config['pages_links'] = unserialize( file_get_contents( $sLinksFile ) );
+  if( !hasPathBasedLinks( $config['pages_links'] ) ){
+    regenerateLinksCache( );
+    $config['pages_links'] = unserialize( file_get_contents( $sLinksFile ) );
+  }
   $sRequestUri = parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
   $sRequestUri = rawurldecode( $sRequestUri );
   $sScriptDir = rtrim( dirname( $_SERVER['SCRIPT_NAME'] ), '/\\' );
@@ -310,4 +315,62 @@ function getPageId( ){
     return true;
   }
 } // end function getPageId
+
+function hasPathBasedLinks( $aLinks ){
+  if( isset( $aLinks ) && is_array( $aLinks ) ){
+    foreach( $aLinks as $sKey => $mValue ){
+      if( substr( $sKey, 0, 1 ) == '/' )
+        return true;
+    } // end foreach
+  }
+  return false;
+} // end function hasPathBasedLinks
+
+function regenerateLinksCache( ){
+  global $config;
+
+  $sLinksFile = $config['dir_database'].'cache/links';
+  $sLinksIdsFile = $config['dir_database'].'cache/links_ids';
+
+  if( !class_exists( 'Sql' ) )
+    require_once __DIR__.'/../core/libraries/sql.php';
+  if( !function_exists( 'change2Url' ) )
+    require_once __DIR__.'/../core/libraries/trash.php';
+
+  $oSql = Sql::getInstance( );
+  $oQuery = $oSql->getQuery( 'SELECT sUrl, sName, sLang, iPage, sRedirect FROM pages ORDER BY iPosition ASC, iPage ASC' );
+
+  while( $aData = $oQuery->fetch( PDO::FETCH_ASSOC ) ){
+    $aData['iPage'] = (int) $aData['iPage'];
+    if( !empty( $aData['sRedirect'] ) ){
+      $aLinksIds[$aData['iPage']] = $aData['sRedirect'];
+    }
+
+    if( !isset( $aLinksIds[$aData['iPage']] ) ){
+      $sSlug = change2Url( !empty( $aData['sUrl'] ) ? $aData['sUrl'] : $aData['sName'] );
+      $sSlug = ( isset( $config['language_separator'] ) ? $aData['sLang'].$config['language_separator'] : null ).$sSlug;
+      $sSlug = trim( $sSlug, '/' );
+      $sUrl2 = ','.$aData['iPage'];
+      $sPath = '/'.$sSlug;
+
+      if( isset( $aLinks[$sPath] ) ){
+        $sSlug .= $sUrl2;
+        $sPath = '/'.$sSlug;
+      }
+
+      $aLinksIds[$aData['iPage']] = $sSlug;
+      $aLinks[$sPath] = Array( $aData['iPage'], $aData['sLang'] );
+      $aLinks['?'.$aLinksIds[$aData['iPage']]] = Array( $aData['iPage'], $aData['sLang'] );
+
+      if( $config['start_page'] == $aData['iPage'] && $aData['sLang'] == $config['default_language'] ){
+        $aLinks['/'] = Array( $aData['iPage'], $aData['sLang'] );
+      }
+    }
+  } // end while
+
+  if( isset( $aLinks ) ){
+    file_put_contents( $sLinksFile, serialize( $aLinks ) );
+    file_put_contents( $sLinksIdsFile, serialize( $aLinksIds ) );
+  }
+} // end function regenerateLinksCache
 ?>

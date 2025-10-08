@@ -101,8 +101,22 @@ final class PagesAdmin extends Pages
 
     $oQuery = $oSql->getQuery( 'SELECT * FROM pages WHERE sLang = "'.$config['language'].'"'.$sWhere.' ORDER BY '.( isset( $_GET['sSort'] ) ? ( ( $_GET['sSort'] == 'id' ) ? 'iPage ASC' : 'sName COLLATE NOCASE ASC, iPosition ASC' ) : 'iPosition ASC, sName COLLATE NOCASE ASC' ) );
     while( $aData = $oQuery->fetch( PDO::FETCH_ASSOC ) ){
+      if( isset( $this->aLinksIds[$aData['iPage']] ) ){
+        if( $config['start_page'] == $aData['iPage'] && $config['language'] == $config['default_language'] ){
+          $sPreviewUrl = '/';
+        }
+        elseif( preg_match( '#^[a-z]+:#i', $this->aLinksIds[$aData['iPage']] ) || substr( $this->aLinksIds[$aData['iPage']], 0, 1 ) == '/' ){
+          $sPreviewUrl = $this->aLinksIds[$aData['iPage']];
+        }
+        else{
+          $sPreviewUrl = '/'.ltrim( $this->aLinksIds[$aData['iPage']], '/' );
+        }
+      }
+      else{
+        $sPreviewUrl = '/';
+      }
       $content .= '<tr class="l'.$aParametersExt['iDepth'].'"><td class="id">'.$aData['iPage'].'</td><th class="name">
-            <a href="?p=pages-form&amp;iPage='.$aData['iPage'].'">'.$aData['sName'].'</a> <a href="./'.( ( $config['start_page'] == $aData['iPage'] ) ? null : $this->aLinksIds[$aData['iPage']] ).'" target="_blank" class="preview" title="'.$lang['Preview'].'">'.$lang['Preview'].'</a>
+            <a href="?p=pages-form&amp;iPage='.$aData['iPage'].'">'.$aData['sName'].'</a> <a href="'.$sPreviewUrl.'" target="_blank" class="preview" title="'.$lang['Preview'].'">'.$lang['Preview'].'</a>
             <ul class="in-options">
               <li class="status custom"><input type="checkbox" class="status" name="aStatus['.$aData['iPage'].']" id="aStatus['.$aData['iPage'].']" value="1"'.( ( $aData['iStatus'] == 1 ) ? ' checked="checked"' : null ).' /><label for="aStatus['.$aData['iPage'].']">'.$lang['Status'].'</label></li>
             </ul>

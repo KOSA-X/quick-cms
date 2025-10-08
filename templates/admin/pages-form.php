@@ -39,7 +39,26 @@ require_once 'templates/admin/_menu.php';
 
       <?php if( isset( $aData['iPage'] ) ){ ?>
       <ul class="options">
-        <li class="icon preview"><a href="./<?php echo ( ( $config['start_page'] == $aData['iPage'] ) ? '?sLanguage='.$config['language'] : $oPage->aLinksIds[$aData['iPage']] ); ?>" title="<?php echo $lang['Preview']; ?>"><?php echo $lang['Preview']; ?></a></li>
+        <?php
+          if( isset( $oPage->aLinksIds[$aData['iPage']] ) ){
+            if( $config['start_page'] == $aData['iPage'] && $config['language'] == $config['default_language'] ){
+              $sPreviewUrl = '/';
+            }
+            elseif( preg_match( '#^[a-z]+:#i', $oPage->aLinksIds[$aData['iPage']] ) || substr( $oPage->aLinksIds[$aData['iPage']], 0, 1 ) == '/' ){
+              $sPreviewUrl = $oPage->aLinksIds[$aData['iPage']];
+            }
+            else{
+              $sPreviewUrl = '/'.ltrim( $oPage->aLinksIds[$aData['iPage']], '/' );
+            }
+          }
+          else{
+            $sPreviewUrl = '/';
+          }
+          if( $config['start_page'] == $aData['iPage'] ){
+            $sPreviewUrl = '/?sLanguage='.$config['language'];
+          }
+        ?>
+        <li class="icon preview"><a href="<?php echo $sPreviewUrl; ?>" title="<?php echo $lang['Preview']; ?>"><?php echo $lang['Preview']; ?></a></li>
       </ul>
       <?php } ?>
       <ul class="buttons">

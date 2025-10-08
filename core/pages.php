@@ -37,13 +37,30 @@ class Pages
   public function generateCache( ){
     global $config;
 
-    if( !is_file( $config['dir_database'].'cache/links_ids' ) || !is_file( $config['dir_database'].'cache/links' ) )
+    $sLinksIdsFile = $config['dir_database'].'cache/links_ids';
+    $sLinksFile = $config['dir_database'].'cache/links';
+
+    if( !is_file( $sLinksIdsFile ) || !is_file( $sLinksFile ) )
       $this->generateLinks( );
 
     if( !isset( $config['pages_links'] ) )
-      $config['pages_links'] = unserialize( file_get_contents( $config['dir_database'].'cache/links' ) );
+      $config['pages_links'] = unserialize( file_get_contents( $sLinksFile ) );
+    $aLinksIds = unserialize( file_get_contents( $sLinksIdsFile ) );
 
-    $aLinksIds = unserialize( file_get_contents( $config['dir_database'].'cache/links_ids' ) );
+    if( isset( $config['pages_links'] ) && is_array( $config['pages_links'] ) ){
+      $bHasPathLinks = false;
+      foreach( $config['pages_links'] as $sKey => $mValue ){
+        if( substr( $sKey, 0, 1 ) == '/' ){
+          $bHasPathLinks = true;
+          break;
+        }
+      }
+      if( !$bHasPathLinks ){
+        $this->generateLinks( );
+        $config['pages_links'] = unserialize( file_get_contents( $sLinksFile ) );
+        $aLinksIds = unserialize( file_get_contents( $sLinksIdsFile ) );
+      }
+    }
     $oSql = Sql::getInstance( );
     $oQuery = $oSql->getQuery( 'SELECT iPage, iPageParent, iMenu, sName, sTitle, sUrl, iTheme, sRedirect, sDescriptionMeta, sDescriptionShort FROM pages WHERE iStatus > 0 AND sLang = "'.$config['language'].'" ORDER BY iPosition ASC, sName COLLATE NOCASE ASC' );
     while( $aData = $oQuery->fetch( PDO::FETCH_ASSOC ) ){
@@ -53,9 +70,16 @@ class Pages
 
       $this->aPages[$aData['iPage']] = $aData;
 
-      $this->aPages[$aData['iPage']]['sLinkName'] = $aLinksIds[$aData['iPage']];
+      if( isset( $aLinksIds[$aData['iPage']] ) ){
+        if( preg_match( '#^[a-z]+:#i', $aLinksIds[$aData['iPage']] ) || substr( $aLinksIds[$aData['iPage']], 0, 1 ) == '/' ){
+          $this->aPages[$aData['iPage']]['sLinkName'] = $aLinksIds[$aData['iPage']];
+        }
+        else{
+          $this->aPages[$aData['iPage']]['sLinkName'] = '/'.ltrim( $aLinksIds[$aData['iPage']], '/' );
+        }
+      }
       if( $config['start_page'] == $aData['iPage'] && $config['language'] == $config['default_language'] ){
-        $this->aPages[$aData['iPage']]['sLinkName'] = './';
+        $this->aPages[$aData['iPage']]['sLinkName'] = '/';
       }
 
       if( $aData['iPageParent'] > 0 ){
@@ -89,16 +113,23 @@ class Pages
       }
 
       if( !isset( $aLinksIds[$aData['iPage']] ) ){
-        $sUrl1 = '?'.( isset( $config['language_separator'] ) ? $aData['sLang'].$config['language_separator'] : null ).change2Url( !empty( $aData['sUrl'] ) ? $aData['sUrl'] : $aData['sName'] );
+        $sSlug = change2Url( !empty( $aData['sUrl'] ) ? $aData['sUrl'] : $aData['sName'] );
+        $sSlug = ( isset( $config['language_separator'] ) ? $aData['sLang'].$config['language_separator'] : null ).$sSlug;
+        $sSlug = trim( $sSlug, '/' );
         $sUrl2 = ','.$aData['iPage'];
+        $sPath = '/'.$sSlug;
 
-        if( isset( $aLinks[$sUrl1] ) ){
-          $aLinksIds[$aData['iPage']] = $sUrl1.$sUrl2;
-          $aLinks[$sUrl1.$sUrl2] = Array( $aData['iPage'], $aData['sLang'] );
+        if( isset( $aLinks[$sPath] ) ){
+          $sSlug .= $sUrl2;
+          $sPath = '/'.$sSlug;
         }
-        else{
-          $aLinksIds[$aData['iPage']] = $sUrl1;
-          $aLinks[$sUrl1] = Array( $aData['iPage'], $aData['sLang'] );
+
+        $aLinksIds[$aData['iPage']] = $sSlug;
+        $aLinks[$sPath] = Array( $aData['iPage'], $aData['sLang'] );
+        $aLinks['?'.$aLinksIds[$aData['iPage']]] = Array( $aData['iPage'], $aData['sLang'] );
+
+        if( $config['start_page'] == $aData['iPage'] && $aData['sLang'] == $config['default_language'] ){
+          $aLinks['/'] = Array( $aData['iPage'], $aData['sLang'] );
         }
       }
     } // end while

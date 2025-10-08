@@ -268,7 +268,7 @@ elseif( isset( $_GET['error'] ) && $_GET['error'] == md5( $_SERVER['HTTP_USER_AG
 }
 
 /**
-* Returns page id from the $_GET
+* Returns page id based on the request path (with legacy GET support)
 * @return array
 */
 function getPageId( ){
@@ -277,6 +277,27 @@ function getPageId( ){
     exit( '<h1>'.( defined( 'DEVELOPER_MODE' ) ? 'There is no required file: '.$config['dir_database'].'cache/links' : 'This page is temporary unavailable' ).'</h1>' );
 
   $config['pages_links'] = unserialize( file_get_contents( $config['dir_database'].'cache/links' ) );
+  $sRequestUri = parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
+  $sRequestUri = rawurldecode( $sRequestUri );
+  $sScriptDir = rtrim( dirname( $_SERVER['SCRIPT_NAME'] ), '/\\' );
+  if( !empty( $sScriptDir ) && $sScriptDir != '/' && strpos( $sRequestUri, $sScriptDir ) === 0 ){
+    $sRequestUri = substr( $sRequestUri, strlen( $sScriptDir ) );
+  }
+  $sRequestUri = '/'.ltrim( $sRequestUri, '/' );
+  if( strlen( $sRequestUri ) > 1 ){
+    $sRequestUri = rtrim( $sRequestUri, '/' );
+    if( $sRequestUri === '' )
+      $sRequestUri = '/';
+  }
+
+  if( isset( $config['pages_links'][$sRequestUri] ) ){
+    $config['language'] = $config['pages_links'][$sRequestUri][1];
+    return $config['pages_links'][$sRequestUri][0];
+  }
+
+  if( $sRequestUri == '/' || $sRequestUri == '/index.php' )
+    return true;
+
   if( isset( $_GET ) && is_array( $_GET ) ){
     foreach( $_GET as $mKey => $mValue ){
       if( isset( $config['pages_links']['?'.$mKey] ) ){
